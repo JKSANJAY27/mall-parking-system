@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 import Dashboard from './pages/Dashboard';
 import CheckIn from './pages/CheckIn';
 import CheckOut from './pages/CheckOut.jsx';
+import Reports from './pages/Reports.jsx';
 
 function App() {
   return (
@@ -51,6 +52,20 @@ function App() {
                   Check-Out Vehicle
                 </NavLink>
               </li>
+              <li>
+                <NavLink
+                  to="/reports"
+                  className={({ isActive }) =>
+                    `text-lg pb-1 transition-colors duration-200 ${
+                      isActive
+                        ? 'text-cyan-400 font-bold border-b-2 border-cyan-400'
+                        : 'text-gray-300 hover:text-white'
+                    }`
+                  }
+                >
+                  Reports
+                </NavLink>
+              </li>
             </ul>
           </div>
         </nav>
@@ -61,6 +76,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/checkin" element={<CheckIn />} />
             <Route path="/checkout" element={<CheckOut />} />
+            <Route path="/reports" element={<Reports />} />
           </Routes>
         </main>
       </div>

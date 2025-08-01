@@ -11,3 +11,9 @@ export const checkInVehicle = (sessionData) => API.post('/sessions/checkin', ses
 export const searchSession = (numberPlate) => API.get(`/sessions/search?numberPlate=${numberPlate}`);
 export const seedSlots = () => API.post('/slots/seed');
 export const checkOutVehicle = (sessionId) => API.put(`/sessions/checkout/${sessionId}`);
+
+export const getRevenueSummary = () => API.get('/reports/revenue/summary');
+export const getDailyRevenue = (date) => API.get(`/reports/revenue/daily?date=${date}`);
+export const getMonthlyRevenue = (year, month) => API.get(`/reports/revenue/monthly?year=${year}&month=${month}`);
+export const getPeakHours = (date = '') => API.get(`/reports/utilization/peak-hours?date=${date}`);
+export const getSlotUtilization = (periodDays = 30) => API.get(`/reports/utilization/slot-usage?periodDays=${periodDays}`);

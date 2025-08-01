@@ -17,5 +17,6 @@ app.get('/', (req, res) => res.send('Mall Parking System API is running...'));
 
 app.use('/api/slots', require('./routes/slotRoutes')); 
 app.use('/api/sessions', require('./routes/sessionRoutes'));
+app.use('/api/reports', require('./routes/reportRoutes'));
 
 module.exports = app;
