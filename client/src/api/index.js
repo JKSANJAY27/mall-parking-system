@@ -10,3 +10,4 @@ export const updateSlotStatus = (id, status) => API.put(`/slots/${id}/status`, {
 export const checkInVehicle = (sessionData) => API.post('/sessions/checkin', sessionData);
 export const searchSession = (numberPlate) => API.get(`/sessions/search?numberPlate=${numberPlate}`);
 export const seedSlots = () => API.post('/slots/seed');
+export const checkOutVehicle = (sessionId) => API.put(`/sessions/checkout/${sessionId}`);

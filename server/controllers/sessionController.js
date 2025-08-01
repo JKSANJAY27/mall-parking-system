@@ -1,5 +1,6 @@
 const ParkingSession = require('../models/ParkingSession');
 const ParkingSlot = require('../models/ParkingSlot');
+const PricingConfig = require('../models/PricingConfig'); 
 
 const getCompatibleSlotTypes = (vehicleType) => {
     switch (vehicleType) {
@@ -14,6 +15,37 @@ const getCompatibleSlotTypes = (vehicleType) => {
         default:
             return [];
     }
+};
+
+const calculateHourlyBill = (durationMinutes, pricingConfig) => {
+    let totalAmount = 0;
+    const { hourlyRates, maxHourlyCap } = pricingConfig;
+
+    const durationHours = durationMinutes / 60;
+
+    hourlyRates.sort((a, b) => a.durationHours - b.durationHours);
+
+    for (let i = 0; i < hourlyRates.length; i++) {
+        const currentSlab = hourlyRates[i];
+        const prevSlabDuration = i > 0 ? hourlyRates[i-1].durationHours : 0;
+
+        if (durationHours > prevSlabDuration) {
+            const effectiveDurationInSlab = Math.min(durationHours, currentSlab.durationHours) - prevSlabDuration;
+
+            if (effectiveDurationInSlab > 0) {
+                if (durationHours <= currentSlab.durationHours) {
+                    totalAmount = currentSlab.amount;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (totalAmount > maxHourlyCap) {
+        totalAmount = maxHourlyCap;
+    }
+
+    return totalAmount;
 };
 
 exports.checkInVehicle = async (req, res) => {
@@ -31,6 +63,7 @@ exports.checkInVehicle = async (req, res) => {
 
     try {
         let assignedSlot = null;
+        const pricingConfig = await PricingConfig.findOne({ type: 'Day Pass' });
 
         const existingActiveSession = await ParkingSession.findOne({ vehicleNumberPlate: numberPlate, status: 'Active' })
                                                         .populate('slot', 'slotNumber');
@@ -39,23 +72,22 @@ exports.checkInVehicle = async (req, res) => {
         }
 
         if (manualSlotId) {
-            const slot = await ParkingSlot.findById(manualSlotId);
+            assignedSlot = await ParkingSlot.findOne({ slotNumber: manualSlotId.toUpperCase() });
 
-            if (!slot) {
-                return res.status(404).json({ msg: 'Manual slot not found.' });
+            if (!assignedSlot) {
+                return res.status(404).json({ msg: `Manual slot '${manualSlotId}' not found.` });
             }
-            if (slot.status !== 'Available') {
-                return res.status(400).json({ msg: `Selected slot ${slot.slotNumber} is not available (${slot.status}).` });
+            if (assignedSlot.status !== 'Available') {
+                return res.status(400).json({ msg: `Selected slot ${assignedSlot.slotNumber} is not available (${assignedSlot.status}).` });
             }
 
             const compatibleTypes = getCompatibleSlotTypes(vehicleType);
-            if (!compatibleTypes.includes(slot.slotType) && !(vehicleType === 'Car' && slot.slotType === 'Compact')) {
-                return res.status(400).json({ msg: `Selected slot ${slot.slotNumber} is not compatible with vehicle type ${vehicleType}.` });
+            if (!compatibleTypes.includes(assignedSlot.slotType) && !(vehicleType === 'Car' && assignedSlot.slotType === 'Compact')) {
+                return res.status(400).json({ msg: `Selected slot ${assignedSlot.slotNumber} is not compatible with vehicle type ${vehicleType}.` });
             }
-            if (vehicleType === 'EV' && slot.slotType === 'EV' && !slot.isChargerAvailable) {
-                return res.status(400).json({ msg: `Selected EV slot ${slot.slotNumber} does not have a charger available.` });
+            if (vehicleType === 'EV' && assignedSlot.slotType === 'EV' && !assignedSlot.isChargerAvailable) {
+                return res.status(400).json({ msg: `Selected EV slot ${assignedSlot.slotNumber} does not have a charger available.` });
             }
-            assignedSlot = slot;
 
         } else {
             const compatibleSlotTypes = getCompatibleSlotTypes(vehicleType);
@@ -65,24 +97,25 @@ exports.checkInVehicle = async (req, res) => {
             };
 
             if (vehicleType === 'EV') {
-                query.isChargerAvailable = true;
+                assignedSlot = await ParkingSlot.findOne({ ...query, isChargerAvailable: true }).sort({ slotNumber: 1 });
+            }
+            if (!assignedSlot) {
+                assignedSlot = await ParkingSlot.findOne(query).sort({ slotNumber: 1 });
             }
 
-            assignedSlot = await ParkingSlot.findOne(query).sort({ slotNumber: 1 });
-
+            if (!assignedSlot && vehicleType === 'Car') {
+                assignedSlot = await ParkingSlot.findOne({ status: 'Available', slotType: 'Compact' }).sort({ slotNumber: 1 });
+            }
             if (!assignedSlot && vehicleType === 'EV') {
                 assignedSlot = await ParkingSlot.findOne({ status: 'Available', slotType: 'EV', isChargerAvailable: false }).sort({ slotNumber: 1 });
                 if (assignedSlot) {
                     console.log(`Warning: EV vehicle assigned to slot ${assignedSlot.slotNumber} without charger.`);
                 }
             }
-            if (!assignedSlot && vehicleType === 'Car') {
-                assignedSlot = await ParkingSlot.findOne({ status: 'Available', slotType: 'Compact' }).sort({ slotNumber: 1 });
-            }
+        }
 
-            if (!assignedSlot) {
-                return res.status(400).json({ msg: `No available slot found for vehicle type ${vehicleType}.` });
-            }
+        if (!assignedSlot) {
+            return res.status(400).json({ msg: `No available slot found for vehicle type ${vehicleType}. Please check the dashboard.` });
         }
 
         const newSession = new ParkingSession({
@@ -90,8 +123,9 @@ exports.checkInVehicle = async (req, res) => {
             vehicleType: vehicleType,
             slot: assignedSlot._id,
             billingType: billingType,
-            billingAmount: billingType === 'Day Pass' ? 150 : 0
+            billingAmount: billingType === 'Day Pass' ? (pricingConfig ? pricingConfig.dayPassRate : 150) : 0
         });
+
         await newSession.save();
 
         assignedSlot.status = 'Occupied';
@@ -113,6 +147,60 @@ exports.checkInVehicle = async (req, res) => {
         if (err.code === 11000) {
             return res.status(400).json({ msg: 'Duplicate key error. Vehicle might already be in session or slot number exists.' });
         }
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.checkOutVehicle = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const session = await ParkingSession.findById(sessionId).populate('slot');
+
+        if (!session) {
+            return res.status(404).json({ msg: 'Parking session not found.' });
+        }
+        if (session.status === 'Completed') {
+            return res.status(400).json({ msg: 'This parking session has already been completed.' });
+        }
+
+        session.exitTime = new Date();
+        session.status = 'Completed';
+
+        let finalBillingAmount = session.billingAmount;
+
+        if (session.billingType === 'Hourly') {
+            const entryTime = session.entryTime;
+            const exitTime = session.exitTime;
+            const durationMs = exitTime.getTime() - entryTime.getTime();
+            const durationMinutes = Math.ceil(durationMs / (1000 * 60));
+
+            const pricingConfig = await PricingConfig.findOne({ type: 'Hourly' });
+
+            if (!pricingConfig) {
+                return res.status(500).json({ msg: 'Hourly pricing configuration not found.' });
+            }
+
+            finalBillingAmount = calculateHourlyBill(durationMinutes, pricingConfig);
+        }
+
+        session.billingAmount = finalBillingAmount;
+        await session.save();
+
+        if (session.slot) {
+            session.slot.status = 'Available';
+            session.slot.currentSession = null;
+            await session.slot.save();
+        }
+
+        res.json({
+            msg: 'Vehicle checked out successfully',
+            session: session,
+            slotFreed: session.slot ? session.slot.slotNumber : 'N/A'
+        });
+
+    } catch (err) {
+        console.error(err.message);
         res.status(500).send('Server Error');
     }
 };

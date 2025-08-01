@@ -4,6 +4,7 @@ const connectDB = require('./config/db');
 
 const ParkingSlot = require('./models/ParkingSlot');
 const ParkingSession = require('./models/ParkingSession');
+const PricingConfig = require('./models/PricingConfig');
 
 const app = express();
 

@@ -1,5 +1,6 @@
 const ParkingSlot = require('../models/ParkingSlot');
 const ParkingSession = require('../models/ParkingSession');
+const PricingConfig = require('../models/PricingConfig');
 
 exports.getAllSlots = async (req, res) => {
     try {
@@ -72,6 +73,7 @@ exports.updateSlotStatus = async (req, res) => {
 exports.seedSlots = async (req, res) => {
     try {
         await ParkingSlot.deleteMany({});
+        await PricingConfig.deleteMany({});
 
         const slotsToCreate = [
             { slotNumber: 'A1-01', slotType: 'Regular' },
@@ -83,7 +85,7 @@ exports.seedSlots = async (req, res) => {
             { slotNumber: 'C1-02', slotType: 'Bike' },
             { slotNumber: 'D1-01', slotType: 'Regular' },
             { slotNumber: 'D1-02', slotType: 'Regular' },
-            { slotNumber: 'E1-01', slotType: 'EV', isChargerAvailable: false }, // EV without charger, for testing
+            { slotNumber: 'E1-01', slotType: 'EV', isChargerAvailable: false },
             { slotNumber: 'E1-02', slotType: 'Regular' },
             { slotNumber: 'F1-01', slotType: 'Compact' },
             { slotNumber: 'G1-01', slotType: 'Handicap Accessible' },
@@ -91,7 +93,29 @@ exports.seedSlots = async (req, res) => {
         ];
 
         const createdSlots = await ParkingSlot.insertMany(slotsToCreate);
-        res.status(201).json({ msg: 'Slots seeded successfully', count: createdSlots.length, slots: createdSlots });
+
+        // --- ADD PRICING CONFIGURATION SEEDING ---
+        const hourlyPricing = {
+            type: 'Hourly',
+            hourlyRates: [
+                { durationHours: 1, amount: 50 },
+                { durationHours: 3, amount: 100 },
+                { durationHours: 6, amount: 150 },
+                { durationHours: 24, amount: 200 } // Use a large number for 6+ hours max cap
+            ],
+            maxHourlyCap: 200
+        };
+
+        const dayPassPricing = {
+            type: 'Day Pass',
+            dayPassRate: 150
+        };
+
+        await PricingConfig.create(hourlyPricing);
+        await PricingConfig.create(dayPassPricing);
+        // --- END PRICING CONFIGURATION SEEDING ---
+
+        res.status(201).json({ msg: 'Slots and pricing seeded successfully', count: createdSlots.length, slots: createdSlots });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

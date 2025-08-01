@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import CheckIn from './pages/CheckIn';
+import CheckOut from './pages/CheckOut.jsx';
 
 function App() {
   return (
@@ -36,6 +37,20 @@ function App() {
                   Check-In Vehicle
                 </NavLink>
               </li>
+              <li>
+                <NavLink
+                  to="/checkout"
+                  className={({ isActive }) =>
+                    `text-lg pb-1 transition-colors duration-200 ${
+                      isActive
+                        ? 'text-cyan-400 font-bold border-b-2 border-cyan-400'
+                        : 'text-gray-300 hover:text-white'
+                    }`
+                  }
+                >
+                  Check-Out Vehicle
+                </NavLink>
+              </li>
             </ul>
           </div>
         </nav>
@@ -45,6 +60,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/checkin" element={<CheckIn />} />
+            <Route path="/checkout" element={<CheckOut />} />
           </Routes>
         </main>
       </div>
